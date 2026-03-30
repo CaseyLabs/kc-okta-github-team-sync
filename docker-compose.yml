@@ -1,0 +1,17 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - go-mod:/go/pkg/mod
+      - go-cache:/go/cache
+    environment:
+      GOMODCACHE: /go/pkg/mod
+      GOCACHE: /go/cache
+
+volumes:
+  go-mod:
+  go-cache:
