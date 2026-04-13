@@ -1,0 +1,80 @@
+name: okta-team-sync-sample
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/50 * * * *' # Adjust cadence as needed
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  GO_VERSION: '1.25.6'
+  WORKDIR: '.' # Set to a subdirectory if running from a monorepo
+  STATE_PATH: state/okta_cursor.json
+  GROUP_PREFIX: github-team-  # change to your Okta Group prefix name
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: ${{ env.WORKDIR }}/go.sum
+
+      - name: Ensure state directory
+        run: mkdir -p "$(dirname "$STATE_PATH")"
+
+      - name: Restore Okta cursor cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.WORKDIR }}/${{ env.STATE_PATH }}
+          key: okta-team-sync-cursor-${{ github.run_id }}
+          restore-keys: okta-team-sync-cursor-
+
+      - name: Build sync binary
+        run: go build -o bin/sync ./cmd/sync
+
+      - name: Run synchronization
+        env:
+          STATE_PATH: ${{ env.STATE_PATH }}
+          OKTA_TEAM_SYNC_GROUP_PREFIX: ${{ env.GROUP_PREFIX }}
+          OKTA_TEAM_SYNC_OKTA_BASE_URL: ${{ secrets.OKTA_TEAM_SYNC_OKTA_BASE_URL }}
+          OKTA_TEAM_SYNC_OKTA_CLIENT_ID: ${{ secrets.OKTA_TEAM_SYNC_OKTA_CLIENT_ID }}
+          OKTA_TEAM_SYNC_OKTA_PRIVATE_KEY: ${{ secrets.OKTA_TEAM_SYNC_OKTA_PRIVATE_KEY }}
+          OKTA_TEAM_SYNC_OKTA_KEY_ID: ${{ secrets.OKTA_TEAM_SYNC_OKTA_KEY_ID }}
+          OKTA_TEAM_SYNC_OKTA_TOKEN_URL: ${{ secrets.OKTA_TEAM_SYNC_OKTA_TOKEN_URL }}
+          OKTA_TEAM_SYNC_OKTA_SCOPES: ${{ secrets.OKTA_TEAM_SYNC_OKTA_SCOPES }}
+
+          OKTA_GITHUB_APP_ID: ${{ secrets.OKTA_GITHUB_APP_ID }}
+          OKTA_GITHUB_APP_IDS: ${{ secrets.OKTA_GITHUB_APP_IDS }}
+
+          OKTA_TEAM_SYNC_GH_APP_ID: ${{ secrets.OKTA_TEAM_SYNC_GH_APP_ID }}
+          OKTA_TEAM_SYNC_GH_INSTALLATION_IDS: ${{ secrets.OKTA_TEAM_SYNC_GH_INSTALLATION_IDS }} # org-slug:id pairs
+          OKTA_TEAM_SYNC_GH_PRIVATE_KEY: ${{ secrets.OKTA_TEAM_SYNC_GH_PRIVATE_KEY }}
+
+          GITHUB_API_URL: ${{ vars.GITHUB_API_URL }}
+          ORG_LIST: ${{ vars.OKTA_TEAM_SYNC_ORG_LIST }}
+          LOOKBACK_MINUTES: '15'
+          MAX_WORKERS: '2'
+          DRY_RUN: 'false'
+        run: ./bin/sync
+
+      - name: Persist updated cursor
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.WORKDIR }}/${{ env.STATE_PATH }}
+          key: okta-team-sync-cursor-${{ github.run_id }}
