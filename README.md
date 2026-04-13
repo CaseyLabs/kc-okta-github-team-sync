@@ -17,7 +17,7 @@
 
 ## Overview
 
-`okta-github-team-sync` is a Go app that syncs Okta groups to GitHub teams across multiple GitHub organizations. It is intended for GitHub Enterprise Cloud (GHEC) deployments that use GitHub Team Sync with Okta.
+`kc-okta-github-team-sync` is a Go app that syncs Okta groups to GitHub teams across multiple GitHub organizations. It is intended for GitHub Enterprise Cloud (GHEC) deployments that use GitHub Team Sync with Okta.
 
 GitHub Team Sync keeps GitHub team membership aligned with Okta group membership, but it does not create new GitHub teams or automatically map newly created Okta groups to those teams. This app fills that gap:
 
@@ -26,15 +26,18 @@ GitHub Team Sync keeps GitHub team membership aligned with Okta group membership
 - For each matching Okta group, it creates or reuses the corresponding GitHub team in each target organization.
 - It maps the GitHub team back to the Okta group so Team Sync can manage membership.
 
-Group names can optionally include a permission suffix. For example, with `OKTA_TEAM_SYNC_GROUP_PREFIX=github-team-`, `github-team-platform__read` creates or maps the `github-team-platform` team and sets its GitHub team permission to `pull`. Supported suffix separators are `__` and `:`, for example `github-team-platform__maintain` or `github-team-platform:admin`.
+Group names can optionally include a permission suffix. For example:
+- with `OKTA_TEAM_SYNC_GROUP_PREFIX=github-team-`, `github-team-platform__read` creates or maps the `github-team-platform` team and sets its GitHub team permission to `pull`. 
+- Supported suffix separators are `__` and `:`
+  - For example: `github-team-platform__maintain` or `github-team-platform:admin`.
 
 Supported permission suffixes are `admin`, `maintain`, `triage`, `write`, `member`, `read`, `viewer`, and `read-only`.
 
 ## Quick Usage
 
 ```shell
-git clone https://github.com/CaseyLabs/okta-github-team-sync
-cd okta-github-team-sync
+git clone https://github.com/CaseyLabs/kc-okta-github-team-sync
+cd kc-okta-github-team-sync
 
 cp env.template .env
 # Edit .env with your Okta, GitHub, organization, and group prefix settings.
@@ -49,24 +52,16 @@ make run
 
 ## Deployment (GitHub Actions)
 
-The repository includes an example workflow at `examples/github-actions/okta-github-team-sync.yml`. Copy it to `.github/workflows/okta-github-team-sync.yml`, then adjust the schedule and environment values for your organization. The sample uses Go 1.25.6 and caches the Okta cursor.
-
-Important inputs:
-
-- Okta secrets: `OKTA_TEAM_SYNC_OKTA_BASE_URL`, `OKTA_TEAM_SYNC_OKTA_CLIENT_ID`, `OKTA_TEAM_SYNC_OKTA_PRIVATE_KEY`, and `OKTA_TEAM_SYNC_OKTA_KEY_ID`.
-- GitHub App secrets: `OKTA_TEAM_SYNC_GH_APP_ID`, `OKTA_TEAM_SYNC_GH_PRIVATE_KEY`, and either `OKTA_TEAM_SYNC_GH_INSTALLATION_IDS` or `OKTA_TEAM_SYNC_GH_INSTALLATION_ID`.
-- PAT fallback secret: `OKTA_TEAM_SYNC_GITHUB_TOKEN` can be used instead of GitHub App credentials.
-- Okta app assignment secrets: `OKTA_GITHUB_APP_IDS` or `OKTA_GITHUB_APP_ID` are required only when the sync should auto-assign matching Okta groups to one or more org-specific GitHub SAML/SCIM apps.
-- Optional Okta secrets: `OKTA_TEAM_SYNC_OKTA_TOKEN_URL` and `OKTA_TEAM_SYNC_OKTA_SCOPES`.
-- Variables: `OKTA_TEAM_SYNC_GROUP_PREFIX` is required. `ORG_LIST` or `OKTA_TEAM_SYNC_ORG_LIST` can be set explicitly, or organizations can be derived from the keys in `OKTA_TEAM_SYNC_GH_INSTALLATION_IDS`. `GITHUB_API_URL` is optional.
-
-The sample workflow stores the group prefix as `GROUP_PREFIX` and maps it to `OKTA_TEAM_SYNC_GROUP_PREFIX`. Its example value is `github-team-`, matching `env.template`.
+The repository includes an example workflow at:
+- `examples/github-actions/okta-github-team-sync.yml`
+- Copy it to `.github/workflows/okta-github-team-sync.yml`
+- Then adjust the schedule and environment values for your organization
 
 ## Troubleshooting
 
-- **Authentication failures** - Reconfirm values in `.env` or GitHub Actions secrets. GitHub App payloads require numeric `OKTA_TEAM_SYNC_GH_APP_ID` and either `OKTA_TEAM_SYNC_GH_INSTALLATION_IDS` or `OKTA_TEAM_SYNC_GH_INSTALLATION_ID`; the PEM may need literal newline characters. If `OKTA_TEAM_SYNC_GITHUB_TOKEN` is set, the app ignores GitHub App env vars and uses the PAT.
-- **Okta 403/429 responses** - Ensure the service principal is assigned to an administrator role spanning the tenant. Rate limit responses are retried with backoff, but persistent failures keep the group in the queue for the next run.
-- **Resetting state** - Remove the cursor file (`state/okta_cursor.json`) and optionally invalidate the Actions cache to force a backfill run equal to `LOOKBACK_MINUTES`.
+- **Authentication failures** - Reconfirm values in `.env` or GitHub Actions secrets. 
+- **Okta 403/429 responses** - Ensure the service principal is assigned to an administrator role spanning the tenant. 
+- **Resetting state** - Remove the cursor file (`state/okta_cursor.json`) and optionally invalidate the Actions cache.
 - **Isolating Okta client tests** - Run `docker compose run --rm --no-deps -T dev go test ./internal/okta -run TestFetchSystemLogDelta -count=1` to focus on the system log pagination test.
 
 ## Prerequisites (One-Time Setup)
@@ -193,20 +188,22 @@ All runtime configuration is provided through environment variables. The reposit
 | `MAX_WORKERS`                        | no            | Concurrency for processing candidate groups (default `2`).                                           |
 | `DRY_RUN`                            | no            | Set to `true`/`false` to toggle dry-run behavior (default `false`).                                  |
 
-`ORG_LIST` or `OKTA_TEAM_SYNC_ORG_LIST` is required unless the app can derive organizations from `OKTA_TEAM_SYNC_GH_INSTALLATION_IDS`. Set an org list explicitly when using PAT-based auth or when the orgs to reconcile differ from the GitHub App installation map. In GitHub Actions, the sample stores this as the variable `OKTA_TEAM_SYNC_ORG_LIST` and maps it to `ORG_LIST`.
+- `ORG_LIST` or `OKTA_TEAM_SYNC_ORG_LIST` is required unless the app can derive organizations from `OKTA_TEAM_SYNC_GH_INSTALLATION_IDS`. 
+- Set an org list explicitly when using PAT-based auth or when the orgs to reconcile differ from the GitHub App installation map. 
+- In GitHub Actions, the sample stores this as the variable `OKTA_TEAM_SYNC_ORG_LIST` and maps it to `ORG_LIST`.
 
 ## Local Development
 
-1. Install Docker with Docker Compose. The container uses Go 1.25.6.
-2. Copy the template: `cp env.template .env` and populate required values. The real `.env` stays untracked.
+1. Install Docker with Docker Compose.
+2. Copy the template: `cp env.template .env` and populate required values.
 3. Build the binary: `make build` (outputs `bin/sync`).
-4. Run a non-mutating rehearsal: `make dryrun`.
+4. Run a dry-run: `make dryrun`.
 5. Run the sync: `make run`.
 6. Execute unit tests: `make test` (`go test ./...`).
 7. Validate Okta credentials: `make test-okta`; set `ASSERTION_ONLY=false` to exchange the assertion for an access token.
 8. Diagnose Okta/GitHub connectivity and mappings: `make diagnose` (set `DIAG_FLAGS=--http-debug` for verbose logs).
 
-Cursor state is written to `state/okta_cursor.json` by default. Remove the file, or override `STATE_PATH`, to force a wider backfill window. Persist the cursor, for example with GitHub Actions cache, so only new events are processed. If reconciliation fails, the previous cursor is preserved automatically.
+- Cursor state is written to `state/okta_cursor.json` by default. 
 
 ## License
 
